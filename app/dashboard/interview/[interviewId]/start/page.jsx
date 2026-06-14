@@ -1,5 +1,5 @@
 "use client";
-import { db } from "@/utils/db";
+import { getDb } from "@/utils/db";
 import { MockInterview } from "@/utils/schema";
 import { eq } from "drizzle-orm";
 import React, { useEffect, useState } from "react";
@@ -12,6 +12,8 @@ function StartInterview({ params }) {
   const [interviewData, setInterviewData] = useState();
   const [mockInterviewQuestion, setMockInterviewQuestion] = useState();
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+  const [error, setError] = useState("");
+
   useEffect(() => {
     GetInterviewDetail();
   }, []);
@@ -21,17 +23,36 @@ function StartInterview({ params }) {
    */
 
   const GetInterviewDetail = async () => {
-    const result = await db
-      .select()
-      .from(MockInterview)
-      .where(eq(MockInterview.mockId, params.interviewId));
+    try {
+      const result = await getDb()
+        .select()
+        .from(MockInterview)
+        .where(eq(MockInterview.mockId, params.interviewId));
 
-    const jsonMockResp = JSON.parse(result[0]?.jsonMockResp);
+      if (!result?.[0]?.jsonMockResp) {
+        throw new Error("Interview not found.");
+      }
 
-    setMockInterviewQuestion(jsonMockResp);
-
-    setInterviewData(result[0]);
+      const jsonMockResp = JSON.parse(result[0].jsonMockResp);
+      setMockInterviewQuestion(jsonMockResp);
+      setInterviewData(result[0]);
+    } catch (err) {
+      console.error(err);
+      setError("We couldn't load this interview. Please create a new one.");
+    }
   };
+
+  if (error) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-700">
+        <p>{error}</p>
+        <Link href="/dashboard" className="mt-4 inline-block font-medium underline">
+          Back to dashboard
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">

@@ -1,7 +1,12 @@
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
+import {
+  clerkPublishableKey,
+  isClerkClientConfigured,
+} from "@/lib/clerk-config";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -11,35 +16,41 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
-  return (
-    <ClerkProvider>
-      <html lang="en">
-        <head>
-          <script
-            async
-            src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8880385119289443"
-            crossorigin="anonymous"
-          ></script>
-          {/* Google Analytics Script */}
-          <script
-            strategy="afterInteractive"
-            src="https://www.googletagmanager.com/gtag/js?id=G-EX6CJQSZY"
-          />
-          <script id="google-analytics" strategy="afterInteractive">
-            {`
+  const content = (
+    <html lang="en">
+      <head>
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8880385119289443"
+          crossOrigin="anonymous"
+        ></script>
+        <Script
+          strategy="afterInteractive"
+          src="https://www.googletagmanager.com/gtag/js?id=G-EX6CJQSZY4"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
             window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-EX6CJQSZY4');
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-EX6CJQSZY4');
           `}
-          </script>
-        </head>
-        <body className={inter.className}>
-          <Toaster />
-          {children}
-        </body>
-      </html>
+        </Script>
+      </head>
+      <body className={inter.className}>
+        <Toaster />
+        {children}
+      </body>
+    </html>
+  );
+
+  if (!isClerkClientConfigured) {
+    return content;
+  }
+
+  return (
+    <ClerkProvider publishableKey={clerkPublishableKey}>
+      {content}
     </ClerkProvider>
   );
 }

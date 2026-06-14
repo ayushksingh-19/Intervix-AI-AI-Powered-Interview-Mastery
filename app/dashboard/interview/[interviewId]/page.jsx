@@ -1,6 +1,6 @@
 "use client";
 import { Button } from "@/components/ui/button";
-import { db } from "@/utils/db";
+import { getDb } from "@/utils/db";
 import { MockInterview } from "@/utils/schema";
 import { eq } from "drizzle-orm";
 import { Lightbulb, WebcamIcon } from "lucide-react";
@@ -11,6 +11,7 @@ import Webcam from "react-webcam";
 function Interview({ params }) {
   const [interviewData, setInterviewData] = useState();
   const [webCamEnabled, setWebCamEnabled] = useState(false);
+  const [error, setError] = useState("");
   useEffect(() => {
     GetInterviewDetail();
   }, []);
@@ -20,13 +21,32 @@ function Interview({ params }) {
    */
 
   const GetInterviewDetail = async () => {
-    const result = await db
-      .select()
-      .from(MockInterview)
-      .where(eq(MockInterview.mockId, params.interviewId));
-    console.log(result);
-    setInterviewData(result[0]);
+    try {
+      const result = await getDb()
+        .select()
+        .from(MockInterview)
+        .where(eq(MockInterview.mockId, params.interviewId));
+
+      if (!result?.[0]) {
+        throw new Error("Interview details were not found.");
+      }
+
+      setInterviewData(result[0]);
+      setError("");
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Unable to load this interview right now.");
+    }
   };
+
+  if (error) {
+    return (
+      <div className="my-10 rounded-lg border border-red-200 bg-red-50 p-6 text-red-700">
+        <p>{error}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="my-10 ">
       <h2 className="font-bold text-2xl">Let's Get Started</h2>

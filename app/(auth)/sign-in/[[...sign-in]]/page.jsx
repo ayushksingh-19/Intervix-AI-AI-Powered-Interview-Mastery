@@ -1,10 +1,10 @@
 "use client"
-import { SignIn,useAuth } from "@clerk/nextjs";
+import { AuthSignIn, useOptionalAuth } from "@/components/auth/AuthSupport";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 export default function Page() {
-  const {isSignedIn}=useAuth();
+  const {isSignedIn}=useOptionalAuth();
   const router=useRouter()
   useEffect(()=>{
      if(isSignedIn){
@@ -82,7 +82,7 @@ export default function Page() {
               
             </div>
 
-            <SignIn />
+            <AuthSignIn />
           </div>
         </main>
       </div>

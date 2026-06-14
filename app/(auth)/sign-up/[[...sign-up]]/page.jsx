@@ -1,4 +1,4 @@
-import { SignUp } from "@clerk/nextjs";
+import { AuthSignUp } from "@/components/auth/AuthSupport";
 
 export default function Page() {
   return (
@@ -41,8 +41,7 @@ export default function Page() {
           quibusdam aperiam voluptatum.
         </p>
         <div className="h-5"></div>
-
-       <SignUp/>
+       <AuthSignUp />
       </div>
     </main>
   </div>

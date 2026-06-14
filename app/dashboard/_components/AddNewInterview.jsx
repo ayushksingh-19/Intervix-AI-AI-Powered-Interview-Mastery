@@ -13,61 +13,71 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { chatSession } from "@/utils/GeminiAIModel";
 import { LoaderCircle } from "lucide-react";
-import { db } from "@/utils/db";
+import { getDb } from "@/utils/db";
 import { MockInterview } from "@/utils/schema";
 import { v4 as uuidv4 } from "uuid";
-import { useUser } from "@clerk/nextjs";
+import { GUEST_EMAIL, useOptionalUser } from "@/components/auth/AuthSupport";
 import moment from "moment/moment";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 function AddNewInterview() {
   const [openDialog, setOpenDialog] = useState(false);
-  const [jobPosition, setJobPosition] = useState();
-  const [jobDesc, setJobDesc] = useState();
-  const [jobExperience, setJobExperience] = useState();
+  const [jobPosition, setJobPosition] = useState("");
+  const [jobDesc, setJobDesc] = useState("");
+  const [jobExperience, setJobExperience] = useState("");
   const [loading, setLoading] = useState(false);
-  const [JsonResponse, setJsonResponse] = useState([]);
-  const { user } = useUser();
-  const route=useRouter()
+  const { user } = useOptionalUser();
+  const router = useRouter();
+
   const onSubmit = async (e) => {
-    setLoading(true);
     e.preventDefault();
+    if (!process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
+      toast("Add your Gemini API key to .env.local before generating interviews.");
+      return;
+    }
 
-    const InputPromt = `Generate ${process.env.NEXT_PUBLIC_INTERVIEW_QUESTION} interview questions and answers in JSON format based on the following: Job Position: ${jobPosition}, Job Description: ${jobDesc}, Years of Experience: ${jobExperience}. Only return the JSON, without any additional text.`;
-    const result = await chatSession.sendMessage(InputPromt);
-    const MockJsonResp = result.response
-      .text()
-      .replace("```json", "")
-      .replace("```", "");
-    //console.log(JSON.parse(MockJsonResp))
-    setJsonResponse(JSON.parse(MockJsonResp));
-   if(MockJsonResp){
-    const resp = await db.insert(MockInterview).values({
-        mockId: uuidv4(),
-        jsonMockResp: MockJsonResp,
-        jobPosition: jobPosition,
-        jobDesc: jobDesc,
-        jobExperience: jobExperience,
-        createdBy: user?.primaryEmailAddress?.emailAddress,
-        createdAt: moment().format("DD-MM-yyyy"),
-      }).returning({mockId:MockInterview.mockId})
-      console.log("Insert ID:", resp)
-      if(resp){
-       route.push('/dashboard/interview/'+resp[0].mockId)
-        setOpenDialog(false)
+    setLoading(true);
+
+    try {
+      const inputPrompt = `Generate ${process.env.NEXT_PUBLIC_INTERVIEW_QUESTION} interview questions and answers in JSON format based on the following: Job Position: ${jobPosition}, Job Description: ${jobDesc}, Years of Experience: ${jobExperience}. Only return the JSON, without any additional text.`;
+      const result = await chatSession.sendMessage(inputPrompt);
+      const mockJsonResp = result.response
+        .text()
+        .replace("```json", "")
+        .replace("```", "")
+        .trim();
+      const parsedResponse = JSON.parse(mockJsonResp);
+
+      if (!Array.isArray(parsedResponse) || parsedResponse.length === 0) {
+        throw new Error("The AI response did not include any interview questions.");
       }
-    
 
-   }else{
-    console.log("ERROR")
-   }
+      const resp = await getDb()
+        .insert(MockInterview)
+        .values({
+          mockId: uuidv4(),
+          jsonMockResp: JSON.stringify(parsedResponse),
+          jobPosition,
+          jobDesc,
+          jobExperience,
+          createdBy: user?.primaryEmailAddress?.emailAddress ?? GUEST_EMAIL,
+          createdAt: moment().format("DD-MM-YYYY"),
+        })
+        .returning({ mockId: MockInterview.mockId });
 
-   setLoading(false);
-   console.log(JsonResponse)
-   
+      if (!resp?.[0]?.mockId) {
+        throw new Error("The interview could not be saved.");
+      }
 
-
-
+      setOpenDialog(false);
+      router.push(`/dashboard/interview/${resp[0].mockId}`);
+    } catch (error) {
+      console.error(error);
+      toast(error.message || "Unable to create the interview right now.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -78,7 +88,7 @@ function AddNewInterview() {
       >
         <h2 className="text-lg text-center">+ Add new</h2>
       </div>
-      <Dialog open={openDialog}>
+      <Dialog open={openDialog} onOpenChange={setOpenDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-2xl">

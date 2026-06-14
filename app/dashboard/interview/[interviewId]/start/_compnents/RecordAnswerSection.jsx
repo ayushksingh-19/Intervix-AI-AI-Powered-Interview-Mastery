@@ -7,18 +7,18 @@ import useSpeechToText from "react-hook-speech-to-text";
 import { Mic, StopCircle } from "lucide-react";
 import { toast } from "sonner";
 import { chatSession } from "@/utils/GeminiAIModel";
-import { db } from "@/utils/db";
+import { getDb } from "@/utils/db";
 import { UserAnswer } from "@/utils/schema";
-import { useUser } from "@clerk/nextjs";
+import { GUEST_EMAIL, useOptionalUser } from "@/components/auth/AuthSupport";
 import moment from "moment";
 
 function RecordAnswerSection({ activeQuestionIndex, mockInterViewQuestion,interviewData }) {
   const [userAnswer, setUserAnswer] = useState("");
   const [loading,setLoading]=useState(false)
-  const {user}=useUser()
+  const [hasSavedAnswer, setHasSavedAnswer] = useState(false);
+  const { user } = useOptionalUser();
   const {
     error,
-    interimResult,
     isRecording,
     results,
     startSpeechToText,
@@ -34,70 +34,81 @@ function RecordAnswerSection({ activeQuestionIndex, mockInterViewQuestion,interv
   }
 
   useEffect(() => {
-    results.map((result) => {
-      setUserAnswer((prevAns) => prevAns + result?.transcript);
-    });
+    const latestResult = results.at(-1);
+
+    if (latestResult?.transcript) {
+      setUserAnswer((prevAns) =>
+        `${prevAns} ${latestResult.transcript}`.trim()
+      );
+    }
   }, [results]);
 
   const StartStopRecording = async () => {
-
     if (isRecording) {
-      
-
       stopSpeechToText();
-      
-     
-
-     
     } else {
+      setUserAnswer("");
+      setResults([]);
+      setHasSavedAnswer(false);
       startSpeechToText();
     }
   };
 
   useEffect(()=>{
-    if(!isRecording&&userAnswer.length>10){
+    if (!isRecording && userAnswer.trim().length > 10 && !hasSavedAnswer) {
+      setHasSavedAnswer(true);
       UpdateUserAnswerInDb();
     }
-    // if (userAnswer?.length < 10) {
-    //   setLoading(false)
-    //   toast("Error while saving your answer, Please record again");
-    //   return;
-    // }
-
-  },[userAnswer])
+  },[hasSavedAnswer, isRecording, userAnswer])
 
   const UpdateUserAnswerInDb=async()=>{
-    console.log(userAnswer)
-    setLoading(true);
-    const feedbackPromt = `Question: ${mockInterViewQuestion[activeQuestionIndex]?.question}, User Answer: ${userAnswer}. Based on the question and the user's answer, please provide a rating 1 to 10 for the answer and feedback in the form of areas for improvement, if any. The feedback should in JSON format only nothing else field should be rating and feeback only, in just 3 to 5 lines.`;
-    const result = await chatSession.sendMessage(feedbackPromt);
-    const mockJsonResp = result.response
-      .text()
-      .replace("```json", "")
-      .replace("```", "");
-
-    const JsonFeedbackResp=JSON.parse(mockJsonResp)
-    const resp=await db.insert(UserAnswer).values({
-      mockIdRef: interviewData?.mockId,
-      question:mockInterViewQuestion[activeQuestionIndex]?.question,
-      correctAns:mockInterViewQuestion[activeQuestionIndex]?.answer,
-      userAns:userAnswer,
-      feedback:JsonFeedbackResp?.feedback,
-      rating:JsonFeedbackResp?.rating,
-      userEmail:user?.primaryEmailAddress?.emailAddress,
-      createdAt:moment().format('DD-MM-yyyy')
-
-
-    })
-    
-    if(resp){
-
-      toast('User Answer recorder successfully!')
-      setUserAnswer('')
-      setResults([])
+    if (!mockInterViewQuestion?.[activeQuestionIndex]) {
+      toast("We couldn't find the active interview question.");
+      return;
     }
-    setResults([])
-    setLoading(false)
+
+    if (!process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
+      toast("Add your Gemini API key to .env.local before recording answers.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const feedbackPrompt = `Question: ${mockInterViewQuestion[activeQuestionIndex]?.question}, User Answer: ${userAnswer}. Based on the question and the user's answer, please provide a rating from 1 to 10 and short feedback in JSON format only. The JSON must include the fields "rating" and "feedback".`;
+      const result = await chatSession.sendMessage(feedbackPrompt);
+      const mockJsonResp = result.response
+        .text()
+        .replace("```json", "")
+        .replace("```", "")
+        .trim();
+
+      const jsonFeedbackResp = JSON.parse(mockJsonResp);
+      const feedback =
+        jsonFeedbackResp?.feedback ?? jsonFeedbackResp?.feeback ?? "";
+      const resp = await getDb().insert(UserAnswer).values({
+        mockIdRef: interviewData?.mockId,
+        question: mockInterViewQuestion[activeQuestionIndex]?.question,
+        correctAns: mockInterViewQuestion[activeQuestionIndex]?.answer,
+        userAns: userAnswer,
+        feedback,
+        rating: String(jsonFeedbackResp?.rating ?? ""),
+        userEmail: user?.primaryEmailAddress?.emailAddress ?? GUEST_EMAIL,
+        createdAt: moment().format("DD-MM-YYYY"),
+      });
+
+      if (resp) {
+        toast("User answer recorded successfully.");
+        setUserAnswer("");
+        setResults([]);
+      }
+    } catch (error) {
+      console.error(error);
+      toast("Unable to save your answer. Please try recording again.");
+      setHasSavedAnswer(false);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -122,7 +133,7 @@ function RecordAnswerSection({ activeQuestionIndex, mockInterViewQuestion,interv
         {isRecording ? (
           <h2 className="flex items-center justify-center text-red-600 gap-2">
             <StopCircle />
-            Recording...
+            Stop Recording
           </h2>
         ) : (
           <h2 className="flex items-center justify-center gap-2">

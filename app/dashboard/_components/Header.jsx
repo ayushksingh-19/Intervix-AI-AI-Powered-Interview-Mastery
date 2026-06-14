@@ -1,15 +1,12 @@
 "use client"
 import { usePathname, useRouter } from 'next/navigation';
-import React, { useEffect } from 'react'
+import React from 'react'
 import Image from 'next/image'
-import { UserButton } from '@clerk/nextjs'
+import { AuthUserButton } from '@/components/auth/AuthSupport'
 
 function Header() {
     const path = usePathname();
     const router =useRouter()
-    useEffect(()=>{
-        console.log(path)
-    },[])
     function getRoutLink(path){
        router.push(path)
     }
@@ -26,7 +23,7 @@ function Header() {
         <li className={`hover:text-primary hover:font-bold transition-all cursor-pointer  ${path=='/dashboard/upgrade'&&'text-primary font-bold'}`}>Upgrade</li>
         <li className={`hover:text-primary hover:font-bold transition-all cursor-pointer  ${path=='/dashboard/how'&&'text-primary font-bold'}`}>How it works?</li>
       </ul>
-      <UserButton/>
+      <AuthUserButton />
     </div>
   )
 }

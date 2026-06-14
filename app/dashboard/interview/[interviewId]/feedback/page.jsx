@@ -1,5 +1,5 @@
 "use client";
-import { db } from "@/utils/db";
+import { getDb } from "@/utils/db";
 import { UserAnswer } from "@/utils/schema";
 import { eq } from "drizzle-orm";
 import React, { useEffect, useState } from "react";
@@ -16,25 +16,41 @@ import { useRouter } from "next/navigation";
 function Feedback({ params }) {
   const [feedbackList, setFeedbackList] = useState([]);
   const [avgRating,setAvgRating]=useState()
+  const [error, setError] = useState("")
   const router=useRouter()
   useEffect(() => {
     GetFeedBack();
   }, []);
   const GetFeedBack = async () => {
-    const result = await db
-      .select()
-      .from(UserAnswer)
-      .where(eq(UserAnswer.mockIdRef, params.interviewId))
-      .orderBy(UserAnswer.id);
+    try {
+      const result = await getDb()
+        .select()
+        .from(UserAnswer)
+        .where(eq(UserAnswer.mockIdRef, params.interviewId))
+        .orderBy(UserAnswer.id);
 
-    setFeedbackList(result);
-    let getTotalOfRating=result.reduce((sum,item)=>sum+Number(item.rating),0)
-    setAvgRating(Math.round(getTotalOfRating/result?.length))
-    // setAvgRating(result.reduce((sum, item) => sum + Number(item.rating), 0) / result.length)
-    // console.log(avgRating)
+      setFeedbackList(result);
+      setError("");
+
+      if (result.length === 0) {
+        setAvgRating(undefined);
+        return;
+      }
+
+      let getTotalOfRating=result.reduce((sum,item)=>sum+Number(item.rating),0)
+      setAvgRating(Math.round(getTotalOfRating/result.length))
+    } catch (err) {
+      console.error(err)
+      setError(err.message || "Unable to load feedback right now.")
+    }
   };
   return (
     <div className="p-10">
+      {error && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          {error}
+        </div>
+      )}
      
       {
         feedbackList?.length==0? <h2 className="font-bold text-xl text-gray-500">No Interview Feedback Record Found</h2> :
